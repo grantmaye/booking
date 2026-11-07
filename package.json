@@ -9,14 +9,15 @@
   "scripts": {
     "dev": "node server.mjs",
     "start": "node server.mjs",
-    "test": "node --test",
+    "test": "node --test test/*.test.mjs",
     "check": "node scripts/check.mjs",
     "demo": "node scripts/demo.mjs",
     "backup": "node scripts/backup.mjs",
     "restore": "node scripts/restore.mjs",
     "deploy:check": "node --env-file-if-exists=.env scripts/preflight.mjs",
     "format": "prettier --write .",
-    "test:release": "node scripts/release-smoke.mjs"
+    "test:release": "node scripts/release-smoke.mjs",
+    "demo:mobile": "node scripts/mobile-demo.mjs"
   },
   "dependencies": {
     "otpauth": "^9.6.0",

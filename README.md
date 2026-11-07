@@ -30,6 +30,10 @@ For development with a separate database, run `npm start` and create the first o
 - Commission snapshots, timesheets, date/location reports, branding, public portfolio uploads and an installable web manifest.
 - Versioned migrations, Docker/Caddy deployment, persistent volumes, health checks, online backups, safe restore, CI and fresh-production smoke tests.
 
+## iPhone and Android
+
+The native companion app lives in [`mobile/`](mobile/README.md). It includes customer booking and visit management, staff schedules and client records, checkout, messaging and shift controls with the same bold Chairside branding. It shares this backend and keeps its SQLite architecture. Use `npm run demo:mobile` for an isolated local mobile demo. Hosting and store publishing remain deferred.
+
 ## Marketing and analytics
 
 The workspace now includes campaign templates, audience segments, draft editing, scheduled email, delivery/open/click reporting, booking-source analytics, a tracked-link builder and CSV export. The Integrations directory provides setup panels for Resend, Stripe, consent-gated Google Analytics 4, the Twilio transport and CSV workflows. See [marketing setup and reporting definitions](docs/MARKETING.md).

@@ -15,6 +15,7 @@ import {
   rateLimit,
   canAppointment,
   requireRole,
+  hashToken,
 } from "./lib/security.mjs";
 import { bookingMessages, runOutbox } from "./lib/messaging.mjs";
 import { extraSchemas, validateExtra } from "./lib/records.mjs";
@@ -353,12 +354,23 @@ const server = createServer(async (req, res) => {
       .map((v) => v.trim())
       .find((v) => v.startsWith("session="))
       ?.slice(8);
-    const user = cookie
+    // Mobile credentials are distinct from browser cookies and hashed at rest.
+    // Never fall back to a cookie when an invalid Authorization header is supplied.
+    const authorization = req.headers.authorization;
+    const bearer = /^Bearer ([a-f0-9]{64})$/.exec(authorization || "")?.[1];
+    const sessionKey = authorization
+      ? bearer
+        ? "mobile:" + hashToken(bearer)
+        : null
+      : cookie?.startsWith("mobile:")
+        ? null
+        : cookie;
+    const user = sessionKey
       ? db
           .prepare(
             "SELECT u.id,u.email,u.name,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires>?",
           )
-          .get(cookie, Date.now())
+          .get(sessionKey, Date.now())
       : null;
     if (user && access(db, user).disabled) fail("Account disabled.", 401);
     if (
@@ -389,7 +401,10 @@ const server = createServer(async (req, res) => {
         setup: !db.prepare("SELECT id FROM users LIMIT 1").get(),
         setupTokenRequired: Boolean(process.env.SETUP_TOKEN),
       });
-    if (["/api/setup", "/api/login"].includes(path) && req.method === "POST") {
+    if (
+      ["/api/setup", "/api/login", "/api/mobile/login"].includes(path) &&
+      req.method === "POST"
+    ) {
       throttle(`auth:${req.socket.remoteAddress}`, 10);
       const data = await body(req);
       let account;
@@ -439,12 +454,25 @@ const server = createServer(async (req, res) => {
       if (grant.mfa_secret && !checkMFA(grant.mfa_secret, data.code))
         fail("A valid authenticator code is required.", 401);
       const token = randomBytes(32).toString("hex");
+      const mobile = path === "/api/mobile/login";
+      const expires = Date.now() + 86400000 * 7;
       db.prepare("DELETE FROM sessions WHERE expires<?").run(Date.now());
       db.prepare("INSERT INTO sessions VALUES(?,?,?)").run(
-        token,
+        mobile ? "mobile:" + hashToken(token) : token,
         account.id,
-        Date.now() + 86400000 * 7,
+        expires,
       );
+      if (mobile)
+        return send(200, {
+          token,
+          expires,
+          user: {
+            id: account.id,
+            email: account.email,
+            name: account.name,
+            role: account.role,
+          },
+        });
       return send(
         200,
         { ok: true },
@@ -454,7 +482,7 @@ const server = createServer(async (req, res) => {
       );
     }
     if (path === "/api/logout" && req.method === "POST") {
-      db.prepare("DELETE FROM sessions WHERE token=?").run(cookie || "");
+      db.prepare("DELETE FROM sessions WHERE token=?").run(sessionKey || "");
       return send(
         200,
         { ok: true },
@@ -474,16 +502,29 @@ const server = createServer(async (req, res) => {
       throttle(`slots:${req.socket.remoteAddress}`, 120);
       const input = Object.fromEntries(url.searchParams);
       if (input.serviceIds) input.serviceIds = input.serviceIds.split(",");
+      let ignoreAppointment = null;
+      if (input.appointmentId) {
+        const appointment = db
+          .prepare("SELECT * FROM appointments WHERE id=?")
+          .get(input.appointmentId);
+        if (!user || !appointment || !canAppointment(db, user, appointment))
+          fail("Appointment not found.", 404);
+        ignoreAppointment = appointment.id;
+      }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date || "")) fail("Choose a date.");
       const slots = [];
       const day = Date.parse(input.date + "T00:00:00Z");
       for (let n = 0; n < 48 * 4; n++) {
         const start = new Date(day + n * 15 * 60000);
         try {
-          const slot = validateSlot(db, {
-            ...input,
-            start: start.toISOString(),
-          });
+          const slot = validateSlot(
+            db,
+            {
+              ...input,
+              start: start.toISOString(),
+            },
+            ignoreAppointment,
+          );
           const p = new Intl.DateTimeFormat("en-CA", {
             timeZone:
               get(db, "locations", input.locationId)?.timezone ||
