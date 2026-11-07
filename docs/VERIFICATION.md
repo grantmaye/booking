@@ -1,13 +1,36 @@
 # Verification — November 6, 2026
 
-- `npm run check`: passed for server, database module, and browser JavaScript.
-- `npm test`: 18 tests passed, 0 failed.
-- Concurrent reservations: two independent SQLite connections attempted one staff/time slot; exactly one succeeded, the other received an availability conflict, and one appointment persisted.
-- HTTP lifecycle: owner setup token, session cookie, unauthenticated rejection, hostile-origin rejection, record validation, public booking, overlap rejection, checkout, cancellation, and logout passed against an isolated temporary database.
-- Desktop browser: owner login, customer booking confirmation, customer cancellation, cash checkout with a tip, recurring booking, calendar display of the second occurrence, and retail stock deduction verified.
-- Mobile browser: customer booking inspected at 390 × 844; document width equaled viewport width (390 px). A heading spacing issue was corrected and rechecked.
-- Dashboard screenshot: `docs/screenshots/dashboard.jpg`, using fictional records from the isolated demo.
+## Release checks
 
-The concurrency test uncovered a database initialization lock race; busy timeout is now configured before the WAL pragma, and workers close before the final verification connection opens.
+- `npm run check`: passed, 27 JavaScript modules syntax checked.
+- `npm test`: **42 passed, 0 failed**.
+- `npm audit --omit=dev --audit-level=high`: **0 vulnerabilities** in installed production dependencies.
+- `docker build -t chairside:verify .`: passed using Node 24 Bookworm slim.
+- `npm run test:release`: passed with a disposable non-root/read-only production container and isolated persistent volume. Verified empty production catalog, owner setup, Secure session cookie, persisted record after restart, online backup, exclusive restore and SQLite integrity.
+- `git diff --check`: passed.
 
-Not verified: Docker build, cloud deployment, payment/messaging integrations, full WCAG audit, load testing, restore drills, native mobile distribution, and long-running production behavior. CI is configured separately; local test results do not imply a completed remote CI run.
+## Regression coverage
+
+Booking capacity across independent database connections, rollback, buffers/time off/shifts, timezone and DST handling, multi-service pricing, resource conflicts, recurring extension idempotency, waitlist claim/expiry, account role isolation, invitation/recovery token use, MFA and encrypted secrets, server-calculated taxes/promotions, inventory reservations/transfers/receipts, split cash/gift tender, deposit application/refunds, gift issuance liability/refunds, membership/loyalty balances, outbox retry/consent, and signature validation for Stripe and email events.
+
+Financial race tests hold provider completion behind an explicit promise: cash settlement is rejected while Checkout creation is in progress. Another test delivers a paid webhook before the Checkout create request returns and proves payment is recorded exactly once. Applied card deposits are rejected before reaching the provider refund API. The tests use local mock provider responses; no live charges/refunds/messages are sent.
+
+## Browser checks
+
+Using the isolated local demo with fictional data:
+
+- Original owner login, public booking/cancellation, cash checkout, recurring visits and retail deduction were checked in the initial implementation.
+- Expanded order creation and cash settlement verified.
+- Calendar week view and consolidated workspace navigation rendered.
+- Chair/resource creation and subsequent editing persisted and rendered.
+- Public haircut + beard booking showed a combined $75 total and confirmed successfully.
+- Customer self-rescheduling moved that multi-service appointment to the new date; confirmation displayed both services.
+- Deposit order creation and cash settlement showed a paid $20 deposit.
+- Date-range reports rendered totals and commission/retention results.
+- Initial customer booking layout was inspected at a 390 × 844 viewport with no horizontal page overflow. The expanded screens were inspected at the browser's current narrow viewport; a complete device/browser accessibility matrix has not been run.
+
+Screenshots: `docs/screenshots/checkout.jpg`, `docs/screenshots/operations.jpg`, plus the earlier `dashboard.jpg`. Screenshots contain only local demo records. UI polish after capture adds distinct navigation symbols and more useful short deposit IDs.
+
+## Not established by these checks
+
+No cloud deployment, live provider acceptance test, penetration test, load certification, statutory tax/payroll audit, or native-store distribution has been performed. Provider secrets are deliberately absent. Run the provider activation tests in `OPERATIONS.md` before accepting real payments or enabling delivery. GitHub CI independently repeats syntax, unit/HTTP tests, audit, container build and the release drill on each push.

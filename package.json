@@ -1,6 +1,6 @@
 {
   "name": "chairside",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -10,7 +10,20 @@
     "dev": "node server.mjs",
     "start": "node server.mjs",
     "test": "node --test",
-    "check": "node --check server.mjs && node --check db.mjs && node --check public/app.js",
-    "demo": "node scripts/demo.mjs"
+    "check": "node scripts/check.mjs",
+    "demo": "node scripts/demo.mjs",
+    "backup": "node scripts/backup.mjs",
+    "restore": "node scripts/restore.mjs",
+    "deploy:check": "node --env-file-if-exists=.env scripts/preflight.mjs",
+    "format": "prettier --write .",
+    "test:release": "node scripts/release-smoke.mjs"
+  },
+  "dependencies": {
+    "otpauth": "^9.6.0",
+    "stripe": "^23.1.0",
+    "svix": "^2.9.1"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.10"
   }
 }

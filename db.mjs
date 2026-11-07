@@ -1,3 +1,4 @@
+import { migrate } from "./lib/migrations.mjs";
 import { DatabaseSync } from "node:sqlite";
 import {
   randomUUID,
@@ -34,6 +35,7 @@ export function openDB(path = process.env.DB_PATH || "data/chairside.sqlite") {
  CREATE TABLE IF NOT EXISTS sales(id TEXT PRIMARY KEY,product_id TEXT NOT NULL,quantity INTEGER NOT NULL,unit_price INTEGER NOT NULL,total INTEGER NOT NULL,created TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS audit(id TEXT PRIMARY KEY,actor TEXT,action TEXT,entity TEXT,created TEXT NOT NULL);
  `);
+  migrate(db);
   return db;
 }
 export const list = (db, kind) =>
@@ -41,7 +43,13 @@ export const list = (db, kind) =>
     .prepare("SELECT id,data FROM records WHERE kind=?")
     .all(kind)
     .map((r) => ({ id: r.id, ...JSON.parse(r.data) }));
-export const get = (db, kind, id) => list(db, kind).find((r) => r.id === id);
+export const get = (db, kind, id) => {
+  if (id === undefined || id === null) return undefined;
+  const row = db
+    .prepare("SELECT data FROM records WHERE kind=? AND id=?")
+    .get(kind, id);
+  return row ? { id, ...JSON.parse(row.data) } : undefined;
+};
 export function put(db, kind, data, key = id()) {
   const { id: _, ...rest } = data;
   db.prepare(
@@ -231,11 +239,30 @@ export function validateSlot(db, input, exclude = null, now = new Date()) {
     !staff?.active ||
     !service?.active ||
     !location ||
-    staff.locationId !== location.id
+    !(staff.locationIds || [staff.locationId]).includes(location.id)
   )
     throw Error(
       "Choose an available service and professional at this location.",
     );
+  if (
+    input.serviceIds !== undefined &&
+    (!Array.isArray(input.serviceIds) ||
+      input.serviceIds.length > 10 ||
+      !input.serviceIds.includes(input.serviceId) ||
+      new Set(input.serviceIds).size !== input.serviceIds.length)
+  )
+    throw Error("Invalid service cart.");
+  if (input.serviceIds?.length) {
+    const services = input.serviceIds.map((key) => get(db, "services", key));
+    if (services.some((s) => !s?.active))
+      throw Error("Invalid service selection.");
+    service.duration = services.reduce((n, s) => n + s.duration, 0);
+    service.buffer = services.reduce((n, s) => n + s.buffer, 0);
+    service.price = services.reduce(
+      (n, s) => n + (s.locationPrices?.[location.id] ?? s.price),
+      0,
+    );
+  } else service.price = service.locationPrices?.[location.id] ?? service.price;
   const start = new Date(input.start);
   if (
     !Number.isFinite(+start) ||
@@ -244,8 +271,8 @@ export function validateSlot(db, input, exclude = null, now = new Date()) {
   )
     throw Error("Choose a future date within the booking window.");
   const end = new Date(+start + (service.duration + service.buffer) * 60000),
-    a = localParts(start, settings.timezone),
-    b = localParts(end, settings.timezone);
+    a = localParts(start, location.timezone || settings.timezone),
+    b = localParts(end, location.timezone || settings.timezone);
   if (
     !location.days.includes(a.day) ||
     a.date !== b.date ||
@@ -254,6 +281,34 @@ export function validateSlot(db, input, exclude = null, now = new Date()) {
     a.minute % 15 !== 0
   )
     throw Error("This time falls outside available business hours.");
+  const shifts = list(db, "shifts").filter((x) => x.staffId === staff.id);
+  if (
+    shifts.length &&
+    !shifts.some(
+      (s) =>
+        s.locationId === location.id &&
+        s.days.includes(a.day) &&
+        a.minute >= s.startMinute &&
+        b.minute <= s.endMinute,
+    )
+  )
+    throw Error("Professional is not on shift at this time.");
+  if (input.resourceId) {
+    const resource = get(db, "resources", input.resourceId);
+    if (!resource?.active || resource.locationId !== location.id)
+      throw Error("Invalid resource.");
+    const busy = db
+      .prepare(
+        "SELECT a.id FROM appointments a JOIN appointment_meta m ON m.appointment_id=a.id WHERE m.resource_id=? AND a.status NOT IN ('cancelled','no-show') AND a.start<? AND a.end>? AND a.id!=?",
+      )
+      .get(
+        input.resourceId,
+        end.toISOString(),
+        start.toISOString(),
+        exclude || "",
+      );
+    if (busy) throw Error("This chair or room is already booked.");
+  }
   const conflict = db
     .prepare(
       "SELECT id FROM appointments WHERE staff_id=? AND status NOT IN ('cancelled','no-show') AND start<? AND end>? AND id!=?",
@@ -310,6 +365,16 @@ export function book(
       slot.service.price,
       String(input.notes || "").slice(0, 2000),
       token,
+    );
+    db.prepare(
+      "INSERT INTO appointment_meta(appointment_id,series_id,group_id,resource_id,service_ids,commission) VALUES(?,?,?,?,?,?)",
+    ).run(
+      key,
+      input.seriesId || null,
+      input.groupId || null,
+      input.resourceId || null,
+      JSON.stringify(input.serviceIds || [input.serviceId]),
+      slot.staff.commission,
     );
     put(db, "notifications", {
       appointmentId: key,
@@ -392,9 +457,13 @@ export function bookSeries(db, input, { now = new Date() } = {}) {
       "Choose 1–12 visits and a weekly, biweekly, or four-week interval.",
     );
   const settings = get(db, "settings", "business"),
-    first = localParts(new Date(input.start), settings.timezone);
-  return transaction(db, () =>
-    Array.from({ length: count }, (_, index) => {
+    first = localParts(
+      new Date(input.start),
+      get(db, "locations", input.locationId)?.timezone || settings.timezone,
+    );
+  const seriesId = count > 1 || input.repeatForever ? id() : null;
+  return transaction(db, () => {
+    const visits = Array.from({ length: count }, (_, index) => {
       const date = new Date(
         Date.parse(first.date + "T12:00:00Z") + index * weeks * 7 * 86400000,
       )
@@ -404,12 +473,46 @@ export function bookSeries(db, input, { now = new Date() } = {}) {
         db,
         {
           ...input,
-          start: zonedInstant(date, first.minute, settings.timezone),
+          seriesId,
+          start: zonedInstant(
+            date,
+            first.minute,
+            get(db, "locations", input.locationId)?.timezone ||
+              settings.timezone,
+          ),
         },
         { now },
       );
-    }),
-  );
+    });
+    if (input.repeatForever) {
+      const last = localParts(
+        new Date(visits.at(-1).start),
+        get(db, "locations", input.locationId)?.timezone || settings.timezone,
+      );
+      put(
+        db,
+        "recurrences",
+        {
+          name: "Recurring appointment",
+          seriesId,
+          locationId: input.locationId,
+          staffId: input.staffId,
+          serviceId: input.serviceId,
+          clientId: input.clientId,
+          minute: first.minute,
+          weeks,
+          nextDate: new Date(
+            Date.parse(last.date + "T12:00:00Z") + weeks * 7 * 86400000,
+          )
+            .toISOString()
+            .slice(0, 10),
+          active: true,
+        },
+        seriesId,
+      );
+    }
+    return visits;
+  });
 }
 export function sellProduct(db, productId, quantity) {
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10000)

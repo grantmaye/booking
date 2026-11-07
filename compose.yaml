@@ -1,0 +1,44 @@
+services:
+  app:
+    build: .
+    image: chairside:local
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      DB_PATH: /app/data/chairside.sqlite
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - chairside-data:/app/data
+      - chairside-backups:/app/backups
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+  proxy:
+    image: caddy:2
+    profiles: [https]
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+volumes:
+  chairside-data:
+  chairside-backups:
+  caddy-data:
+  caddy-config:

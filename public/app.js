@@ -1,3 +1,5 @@
+import { extensions, standalone } from "./advanced.js";
+let extension;
 const $ = (s) => document.querySelector(s),
   app = $("#app"),
   modal = $("#modal");
@@ -37,6 +39,11 @@ const icons = {
   Growth: "↗",
   Reports: "▥",
   Settings: "⚙",
+  Operations: "◈",
+  Access: "⚿",
+  Studio: "✺",
+  Messages: "✉",
+  Tools: "⊞",
 };
 async function api(path, options = {}) {
   const r = await fetch("/api" + path, {
@@ -58,20 +65,29 @@ const find = (kind, id) => state.data[kind].find((x) => x.id === id) || {};
 const biz = () => state.data?.settings[0] || catalog?.settings || {};
 const dateKey = (value) =>
   new Intl.DateTimeFormat("en-CA", {
-    timeZone: biz().timezone || "America/New_York",
+    timeZone:
+      catalog?.locations?.find((l) => l.id === booking.locationId)?.timezone ||
+      biz().timezone ||
+      "America/New_York",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   }).format(new Date(value));
 const time = (value) =>
   new Intl.DateTimeFormat("en-US", {
-    timeZone: biz().timezone || "America/New_York",
+    timeZone:
+      catalog?.locations?.find((l) => l.id === booking.locationId)?.timezone ||
+      biz().timezone ||
+      "America/New_York",
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(value));
 const fullDate = (value) =>
   new Intl.DateTimeFormat("en-US", {
-    timeZone: biz().timezone || "America/New_York",
+    timeZone:
+      catalog?.locations?.find((l) => l.id === booking.locationId)?.timezone ||
+      biz().timezone ||
+      "America/New_York",
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -130,6 +146,10 @@ function modalForm(title, content, onSubmit, button = "Save changes") {
 }
 async function refresh() {
   state.data = await api("/data");
+  if (["owner", "manager", "receptionist"].includes(state.user.role))
+    state.ops = await api("/operations");
+  if (["owner", "manager"].includes(state.user.role))
+    state.accounts = await api("/team/access");
   render();
 }
 function appointments() {
@@ -147,9 +167,24 @@ function stats() {
         dateKey(p.created) === state.date &&
         appointments().some((a) => a.id === p.appointment_id),
     ),
-    total = paid.reduce((n, p) => n + p.total, 0);
+    total = state.ops
+      ? (state.ops.orders || [])
+          .filter(
+            (o) =>
+              o.status === "paid" &&
+              o.kind !== "giftcard" &&
+              dateKey(o.created) === state.date &&
+              (state.location === "all" || o.location_id === state.location),
+          )
+          .reduce((n, o) => n + o.total, 0)
+      : paid.reduce((n, p) => n + p.total, 0);
   return `<div class="stats">${[
-    ["Revenue collected", money(total), "Cash payments recorded today", "↗"],
+    [
+      "Revenue collected",
+      money(total),
+      "Collected today, including deposits",
+      "↗",
+    ],
     [
       "Appointments",
       today.filter((a) => a.status !== "cancelled").length,
@@ -199,7 +234,7 @@ function appointmentRows(items) {
 function overview() {
   const today = appointments().filter((a) => dateKey(a.start) === state.date),
     low = state.data.products.filter((p) => p.stock <= p.reorderAt);
-  return `<div class="welcome"><div><span class="eyebrow">YOUR STUDIO, AT A GLANCE</span><h1>A good day starts here.</h1><p>Keep your chairs full and your business moving.</p></div><a class="secondary" href="/book" target="_blank">View booking page ↗</a></div>${stats()}<div class="overview-grid"><section class="panel"><div class="section-head"><div><h2>Today's appointments <span class="count">${today.length}</span></h2><p>Your people. Your schedule. All in one place.</p></div><button class="text-btn" data-nav="Calendar">Full calendar ↗</button></div>${appointmentRows(today)}</section><aside class="side-stack"><section class="spotlight"><span class="eyebrow">A LITTLE LESS ADMIN</span><h2>More time for<br>your craft.</h2><p>Let clients find their next appointment, any time of day.</p><a class="light-btn" href="/book" target="_blank">Open online booking ↗</a><div class="decorative" aria-hidden="true">✳</div></section><section class="panel pulse"><h2>Studio pulse <span class="live-dot"></span></h2><div><span>Team members</span><b>${state.data.staff.filter((s) => s.active && (state.location === "all" || s.locationId === state.location)).length} active</b></div><div><span>Low-stock products</span><button class="text-btn" data-nav="Inventory">${low.length} to review →</button></div><div><span>Messaging</span><span class="muted">Not connected</span></div><div><span>Online booking</span><span class="green">Open for bookings</span></div></section></aside></div><section class="panel team-strip"><div class="section-head"><h2>The people behind the craft</h2><button class="text-btn" data-nav="Team">Manage team →</button></div><div class="team-mini">${state.data.staff
+  return `<div class="welcome"><div><span class="eyebrow">YOUR STUDIO, AT A GLANCE</span><h1>A good day starts here.</h1><p>Keep your chairs full and your business moving.</p></div><a class="secondary" href="/book" target="_blank">View booking page ↗</a></div>${stats()}<div class="overview-grid"><section class="panel"><div class="section-head"><div><h2>Today's appointments <span class="count">${today.length}</span></h2><p>Your people. Your schedule. All in one place.</p></div><button class="text-btn" data-nav="Calendar">Full calendar ↗</button></div>${appointmentRows(today)}</section><aside class="side-stack"><section class="spotlight"><span class="eyebrow">A LITTLE LESS ADMIN</span><h2>More time for<br>your craft.</h2><p>Let clients find their next appointment, any time of day.</p><a class="light-btn" href="/book" target="_blank">Open online booking ↗</a><div class="decorative" aria-hidden="true">✳</div></section><section class="panel pulse"><h2>Studio pulse <span class="live-dot"></span></h2><div><span>Team members</span><b>${state.data.staff.filter((s) => s.active && (state.location === "all" || s.locationId === state.location)).length} active</b></div><div><span>Low-stock products</span><button class="text-btn" data-nav="Inventory">${low.length} to review →</button></div><div><span>Messaging</span><span class="muted">${state.ops?.integrations?.email ? "Email configured" : "Not configured"}</span></div><div><span>Online booking</span><span class="green">Open for bookings</span></div></section></aside></div><section class="panel team-strip"><div class="section-head"><h2>The people behind the craft</h2><button class="text-btn" data-nav="Team">Manage team →</button></div><div class="team-mini">${state.data.staff
     .filter((s) => s.active)
     .map(
       (s) =>
@@ -273,7 +308,7 @@ function clients() {
 const cardHead = (title, sub, kind, label) =>
   `<div class="page-heading"><div><h1>${title}</h1><p>${sub}</p></div><button class="primary" data-edit="${kind}">＋ ${label}</button></div>`;
 function team() {
-  return `${cardHead("Great people. Great service.", "Manage your professionals, locations, and commission rates.", "staff", "Add professional")}<div class="cards">${state.data.staff.map((s) => `<section class="panel staff-card">${avatar(s)}${badge(s.active ? "active" : "archived")}<h2>${esc(s.name)}</h2><p>${esc(s.title)}</p><div class="card-detail"><span>Location</span><b>${esc(find("locations", s.locationId).name)}</b></div><div class="card-detail"><span>Commission</span><b>${s.commission}%</b></div><div class="card-detail"><span>Completed visits</span><b>${state.data.appointments.filter((a) => a.staff_id === s.id && a.status === "completed").length}</b></div><button class="secondary" data-edit="staff:${s.id}">Edit professional</button></section>`).join("")}</div><div class="notice">Staff profiles manage scheduling and commissions. Owner authentication is enabled; individual staff logins and restricted staff permissions are not yet implemented.</div>`;
+  return `${cardHead("Great people. Great service.", "Manage your professionals, locations, and commission rates.", "staff", "Add professional")}<div class="cards">${state.data.staff.map((s) => `<section class="panel staff-card">${avatar(s)}${badge(s.active ? "active" : "archived")}<h2>${esc(s.name)}</h2><p>${esc(s.title)}</p><div class="card-detail"><span>Location</span><b>${esc(find("locations", s.locationId).name)}</b></div><div class="card-detail"><span>Commission</span><b>${s.commission}%</b></div><div class="card-detail"><span>Completed visits</span><b>${state.data.appointments.filter((a) => a.staff_id === s.id && a.status === "completed").length}</b></div><button class="secondary" data-edit="staff:${s.id}">Edit professional</button></section>`).join("")}</div><div class="notice">Invite professionals from Access to give them a restricted login. Configure shifts and chairs in Operations.</div>`;
 }
 function services() {
   return `${cardHead("Services worth coming back for.", "Set your menu, prices, service duration, and cleanup buffers.", "services", "Add service")}<div class="cards">${state.data.services.map((s) => `<section class="panel service-card"><div class="service-symbol">✂</div><span class="eyebrow">${esc(s.category)}</span><h2>${esc(s.name)}</h2><p>${s.duration} minutes${s.buffer ? ` + ${s.buffer} minute buffer` : ""}</p><strong>${money(s.price)}</strong><div class="card-detail">${badge(s.active ? "active" : "archived")}<button class="text-btn" data-edit="services:${s.id}">Edit service →</button></div></section>`).join("")}</div>`;
@@ -285,13 +320,13 @@ function waitlist() {
   return `${cardHead("Turn openings into opportunities.", "Keep walk-ins and flexible clients ready for the next available chair.", "waitlist", "Add to waitlist")}<div class="panel">${items.length ? `<div class="table-scroll"><table><thead><tr><th>Client</th><th>Service</th><th>Preferred date</th><th>Status</th><th></th></tr></thead><tbody>${items.map((w) => `<tr><td><b>${esc(w.name)}</b><small>${esc(w.email)}</small></td><td>${esc(find("services", w.serviceId).name)}</td><td>${esc(w.date)}</td><td>${badge(w.status || "waiting")}</td><td><button class="text-btn" data-edit="waitlist:${w.id}">Edit</button> <button class="text-btn" data-delete="waitlist:${w.id}">Remove</button></td></tr>`).join("")}</tbody></table></div>` : empty("Ready for the next opening", "Add walk-ins or clients waiting for their preferred time.")}</div>`;
 }
 function checkoutPage() {
-  return `<div class="page-heading"><div><h1>A smooth finish to every visit.</h1><p>Record cash payments and tips, then award client loyalty points.</p></div></div><div class="notice">Cash checkout is live. Card, wallet, deposit, and refund processing need a payment provider connection.</div><section class="panel"><div class="section-head"><h2>Ready for checkout</h2></div>${appointmentRows(appointments().filter((a) => ["confirmed", "checked-in"].includes(a.status)))}</section><section class="panel spaced"><div class="section-head"><h2>Payment history</h2></div>${state.data.payments.length ? `<div class="table-scroll"><table><thead><tr><th>Receipt</th><th>Collected</th><th>Tip</th><th>Method</th><th>Date</th></tr></thead><tbody>${state.data.payments.map((p) => `<tr><td>${p.id.slice(0, 8).toUpperCase()}</td><td>${money(p.total)}</td><td>${money(p.tip)}</td><td>Cash</td><td>${fullDate(p.created)}</td></tr>`).join("")}</tbody></table></div>` : empty("No payments yet", "Completed cash checkouts will appear here.")}</section>`;
+  return `<div class="page-heading"><div><h1>A smooth finish to every visit.</h1><p>Record cash payments and tips, then award client loyalty points.</p></div></div><div class="notice">Use POS for split payments, gift cards, promotions, tax, loyalty redemption, card checkout, and refunds. This screen provides quick cash checkout.</div><section class="panel"><div class="section-head"><h2>Ready for checkout</h2></div>${appointmentRows(appointments().filter((a) => ["confirmed", "checked-in"].includes(a.status)))}</section><section class="panel spaced"><div class="section-head"><h2>Payment history</h2></div>${state.data.payments.length ? `<div class="table-scroll"><table><thead><tr><th>Receipt</th><th>Collected</th><th>Tip</th><th>Method</th><th>Date</th></tr></thead><tbody>${state.data.payments.map((p) => `<tr><td>${p.id.slice(0, 8).toUpperCase()}</td><td>${money(p.total)}</td><td>${money(p.tip)}</td><td>Cash</td><td>${fullDate(p.created)}</td></tr>`).join("")}</tbody></table></div>` : empty("No payments yet", "Completed cash checkouts will appear here.")}</section>`;
 }
 function inventory() {
   return `${cardHead("Keep the good stuff in stock.", "Retail products, stock counts, and reorder alerts.", "products", "Add product")}<div class="cards">${state.data.products.map((p) => `<section class="panel product-card"><div class="product-art" aria-hidden="true"><span>${esc(p.name.split(" ")[0])}<small>CHAIRSIDE</small></span></div><h2>${esc(p.name)}</h2><div class="card-detail"><strong>${money(p.price)}</strong>${badge(p.stock <= p.reorderAt ? "low-stock" : "in-stock")}</div><div class="card-detail"><span>${p.stock} units in stock</span><div><button class="text-btn" data-sale="${p.id}">Sell</button> · <button class="text-btn" data-edit="products:${p.id}">Manage →</button></div></div></section>`).join("")}</div>`;
 }
 function growth() {
-  return `<div class="page-heading"><div><h1>Give them a reason to return.</h1><p>Build your retention toolkit, one great relationship at a time.</p></div><button class="primary" data-edit="campaigns">＋ Draft campaign</button></div><div class="notice">Campaigns are saved as drafts. Email/SMS delivery and recurring membership billing are not connected.</div><div class="growth-grid">${[
+  return `<div class="page-heading"><div><h1>Give them a reason to return.</h1><p>Build your retention toolkit, one great relationship at a time.</p></div><button class="primary" data-edit="campaigns">＋ Draft campaign</button></div><div class="notice">Create campaign drafts here, then queue delivery in Messages. Configure a Stripe Price ID on membership plans to enable online subscriptions.</div><div class="growth-grid">${[
     ["campaigns", "Campaign drafts", "A thoughtful message goes a long way."],
     ["memberships", "Membership plans", "Make regular visits a habit."],
     ["giftcards", "Gift card ledger", "Track manually issued gift balances."],
@@ -375,28 +410,55 @@ function settings() {
 function render() {
   const pages = {
     Overview: overview,
-    Calendar: calendar,
+    Calendar: extension.pages.Schedule,
     Clients: clients,
     Team: team,
     Services: services,
     Waitlist: waitlist,
-    Checkout: checkoutPage,
+    Checkout: extension.pages.POS,
     Inventory: inventory,
     Growth: growth,
-    Reports: reports,
+    Reports: extension.pages.Analytics,
     Settings: settings,
+    ...Object.fromEntries(
+      Object.entries(extension.pages).filter(
+        ([key]) => !["Schedule", "POS", "Analytics"].includes(key),
+      ),
+    ),
   };
+  const allowed =
+    state.user.role === "staff"
+      ? ["Overview", "Calendar", "Clients", "Schedule", "Access"]
+      : state.user.role === "receptionist"
+        ? [
+            "Overview",
+            "Calendar",
+            "Clients",
+            "Waitlist",
+            "Checkout",
+            "POS",
+            "Messages",
+            "Schedule",
+          ]
+        : Object.keys(pages);
+  Object.keys(pages).forEach((key) => {
+    if (!allowed.includes(key)) delete pages[key];
+  });
+  if (!pages[state.page]) state.page = "Overview";
   app.innerHTML = `<aside class="sidebar"><a class="brand" href="/"> <img src="/icon.svg" alt="">chairside<span>®</span></a><div class="workspace"><div class="studio-mark">C</div><div><b>${esc(biz().name)}</b><small>Studio workspace</small></div></div><span class="nav-label">WORKSPACE</span><nav>${Object.keys(
     pages,
   )
     .map(
       (name, i) =>
-        `${i === 6 ? '<span class="nav-label">BUSINESS</span>' : ""}<button class="nav-item ${state.page === name ? "active" : ""}" data-nav="${name}"><span>${icons[name]}</span>${name}${name === "Waitlist" && state.data.waitlist.length ? `<em>${state.data.waitlist.length}</em>` : ""}</button>`,
+        `${i === 6 ? '<span class="nav-label">BUSINESS</span>' : ""}<button class="nav-item ${state.page === name ? "active" : ""}" data-nav="${name}" title="${name}"><span>${icons[name] || "◇"}</span>${name}${name === "Waitlist" && state.data.waitlist.length ? `<em>${state.data.waitlist.length}</em>` : ""}</button>`,
     )
     .join(
       "",
-    )}</nav><div class="sidebar-bottom"><div class="connection"><span class="live-dot"></span> Your studio is online</div><button class="profile" data-action="logout">${avatar(state.user)}<span><b>${esc(state.user.name)}</b><small>Owner · Sign out</small></span><span>↪</span></button></div></aside><div class="main-wrap"><header class="topbar"><div class="breadcrumb">Workspace <span>/</span> <b>${state.page}</b></div><div class="topbar-actions"><select id="location" aria-label="Filter location"><option value="all">All locations</option>${options(state.data.locations, "name", state.location)}</select><span class="today-label">${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span><button class="primary" data-action="book">＋ New appointment</button></div></header><main>${pages[state.page]()}</main><footer>CHAIRSIDE <span>Good business. Better days.</span><span>Demo studio data · USD</span></footer></div>`;
+    )}</nav><div class="sidebar-bottom"><div class="connection"><span class="live-dot"></span> Your studio is online</div><button class="profile" data-action="logout">${avatar(state.user)}<span><b>${esc(state.user.name)}</b><small>${esc(state.user.role)} · Sign out</small></span><span>↪</span></button></div></aside><div class="main-wrap"><header class="topbar"><div class="breadcrumb">Workspace <span>/</span> <b>${state.page}</b></div><div class="topbar-actions"><select id="location" aria-label="Filter location"><option value="all">All locations</option>${options(state.data.locations, "name", state.location)}</select><span class="today-label">${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span><button class="primary" data-action="book">＋ New appointment</button></div></header><main>${pages[state.page]()}</main><footer>CHAIRSIDE <span>Good business. Better days.</span><span>USD · ${esc(biz().timezone)}</span></footer></div>`;
   bind();
+  extension.bind();
+  if (state.user.role === "staff")
+    document.querySelectorAll("[data-edit]").forEach((b) => (b.hidden = true));
 }
 function bind() {
   document.querySelectorAll("[data-nav]").forEach(
@@ -619,6 +681,7 @@ function edit(kind, key) {
       field(
         "Cancellation notice (hours)",
         "cancelHours",
+        "taxBasisPoints",
         x.cancelHours,
         "number",
         'min="0" required',
@@ -690,6 +753,42 @@ function edit(kind, key) {
         ],
         x.status,
       );
+  if (kind === "locations")
+    fields +=
+      field(
+        "Location timezone",
+        "timezone",
+        x.timezone || state.data.settings[0].timezone,
+      ) +
+      field(
+        "Tax rate (basis points; 100 = 1%)",
+        "taxBasisPoints",
+        x.taxBasisPoints || 0,
+        "number",
+        'min="0" max="5000"',
+      );
+  if (kind === "staff")
+    fields += `<label class="wide">Additional locations<select name="extraLocations" multiple>${options(d.locations, "name", "")}</select></label>`;
+  if (kind === "services")
+    fields += d.locations
+      .map((l) =>
+        field(
+          "Price at " + l.name + " ($; blank uses default)",
+          "locationPrice_" + l.id,
+          x.locationPrices?.[l.id] !== undefined
+            ? x.locationPrices[l.id] / 100
+            : "",
+          "number",
+          'min="0" step="0.01"',
+        ),
+      )
+      .join("");
+  if (kind === "memberships")
+    fields += field(
+      "Stripe recurring Price ID",
+      "stripePriceId",
+      x.stripePriceId || "",
+    );
   modalForm(
     `${key ? "Edit" : "Add"} ${{ staff: "professional", products: "product", services: "service", clients: "client", settings: "business", locations: "location", waitlist: "waitlist entry", memberships: "membership", campaigns: "campaign", giftcards: "gift card", subscriptions: "enrollment", rent: "rent record" }[kind]}`,
     fields,
@@ -708,12 +807,31 @@ function edit(kind, key) {
         "close",
         "bookingDays",
         "cancelHours",
+        "taxBasisPoints",
       ])
         if (k in data) data[k] = Number(data[k]);
       if (["staff", "services", "memberships"].includes(kind))
         data.active = data.active === "on";
       if (kind === "clients")
         data.marketingConsent = data.marketingConsent === "on";
+      if (kind === "staff")
+        data.locationIds = [
+          ...new Set([
+            data.locationId,
+            ...Array.from(
+              document.querySelector("[name=extraLocations]").selectedOptions,
+            ).map((o) => o.value),
+          ]),
+        ];
+      if (kind === "services")
+        data.locationPrices = Object.fromEntries(
+          d.locations
+            .filter((l) => data["locationPrice_" + l.id] !== "")
+            .map((l) => [
+              l.id,
+              Math.round(Number(data["locationPrice_" + l.id]) * 100),
+            ]),
+        );
       if (kind === "locations") data.days = data.days.split(",").map(Number);
       if (kind === "campaigns") {
         data.status = "draft";
@@ -823,6 +941,15 @@ async function newBooking(existing) {
         existing?.staff_id,
       ) +
       select("Client", "clientId", d.clients, existing?.client_id) +
+      select(
+        "Chair / room (optional)",
+        "resourceId",
+        [
+          { id: "", name: "No assigned resource" },
+          ...(state.ops?.resources || []).filter((r) => r.active),
+        ],
+        existing?.resource_id,
+      ) +
       field("Date", "date", state.date, "date", "required") +
       `<label>Available time<select name="start" required><option value="">Choose a date</option></select></label>` +
       (existing
@@ -839,7 +966,7 @@ async function newBooking(existing) {
             { id: "2", name: "Every 2 weeks" },
             { id: "4", name: "Every 4 weeks" },
           ])) +
-      `<label class="wide">Notes<textarea name="notes"></textarea></label>`,
+      `<label class="check wide"><input type="checkbox" name="repeatForever"> Keep this schedule recurring within the booking window</label><label class="wide">Notes<textarea name="notes"></textarea></label>`,
     async (data) => {
       if (existing)
         await send(
@@ -847,7 +974,10 @@ async function newBooking(existing) {
           { start: data.start },
           "PATCH",
         );
-      else await send("/appointments", data);
+      else {
+        data.repeatForever = data.repeatForever === "on";
+        await send("/appointments", data);
+      }
     },
     existing ? "Save new time" : "Book appointment",
   );
@@ -862,7 +992,9 @@ async function newBooking(existing) {
     const loc = form.elements.locationId.value;
     const current = form.elements.staffId.value;
     form.elements.staffId.innerHTML = options(
-      d.staff.filter((s) => s.active && s.locationId === loc),
+      d.staff.filter(
+        (s) => s.active && (s.locationIds || [s.locationId]).includes(loc),
+      ),
       "name",
       current,
     );
@@ -873,6 +1005,7 @@ async function newBooking(existing) {
         serviceId: form.elements.serviceId.value,
         staffId: form.elements.staffId.value,
         date: form.elements.date.value,
+        resourceId: form.elements.resourceId?.value || "",
       });
       const slots = await api("/public/availability?" + query);
       if (request !== slotRequest || !form.isConnected) return;
@@ -885,7 +1018,7 @@ async function newBooking(existing) {
       toast(e.message);
     }
   };
-  ["locationId", "serviceId", "staffId", "date"].forEach(
+  ["locationId", "serviceId", "staffId", "date", "resourceId"].forEach(
     (k) => (form.elements[k].onchange = slots),
   );
   await slots();
@@ -957,10 +1090,14 @@ async function auth() {
   const session = await api("/session");
   if (session.user) {
     state.user = session.user;
+    if (state.user.role === "customer") {
+      location.href = "/portal";
+      return;
+    }
     await refresh();
     return;
   }
-  app.innerHTML = `<div class="auth-layout"><div class="auth-story"><a class="brand" href="/"><img src="/icon.svg" alt="">chairside</a><span class="eyebrow">GOOD BUSINESS. BETTER DAYS.</span><h1>Your craft.<br>Your people.<br>Your studio.</h1><p>A calmer way to keep your business moving.</p><div class="auth-art" aria-hidden="true">✳</div></div><div class="auth-form"><span class="eyebrow">STUDIO WORKSPACE</span><h1>${session.setup ? "Make yourself at home." : "Welcome back."}</h1><p>${session.setup ? "Create your owner account to set up your studio." : "Sign in to pick up where you left off."}</p><form id="auth-form">${session.setup ? field("Your name", "name", "", "text", 'required autocomplete="name"') : ""}${session.setup && session.setupTokenRequired ? field("Setup token", "setupToken", "", "password", "required") : ""}${field("Email address", "email", "", "email", 'required autocomplete="email"')}${field("Password", "password", "", "password", `required minlength="12" maxlength="200" autocomplete="${session.setup ? "new-password" : "current-password"}"`)}${session.setup ? "<small>Use at least 12 characters. This becomes the owner account.</small>" : ""}<p class="form-error" role="alert"></p><button class="primary">${session.setup ? "Create workspace" : "Sign in"} →</button></form><a href="/book" class="text-btn">Here for an appointment? Book a visit ↗</a><p class="footnote">Includes a fictional studio catalog to help you explore. No sample bookings or payments are recorded.</p></div></div>`;
+  app.innerHTML = `<div class="auth-layout"><div class="auth-story"><a class="brand" href="/"><img src="/icon.svg" alt="">chairside</a><span class="eyebrow">GOOD BUSINESS. BETTER DAYS.</span><h1>Your craft.<br>Your people.<br>Your studio.</h1><p>A calmer way to keep your business moving.</p><div class="auth-art" aria-hidden="true">✳</div></div><div class="auth-form"><span class="eyebrow">STUDIO WORKSPACE</span><h1>${session.setup ? "Make yourself at home." : "Welcome back."}</h1><p>${session.setup ? "Create your owner account to set up your studio." : "Sign in to pick up where you left off."}</p><form id="auth-form">${session.setup ? field("Your name", "name", "", "text", 'required autocomplete="name"') : ""}${session.setup && session.setupTokenRequired ? field("Setup token", "setupToken", "", "password", "required") : ""}${field("Email address", "email", "", "email", 'required autocomplete="email"')}${field("Password", "password", "", "password", `required minlength="12" maxlength="200" autocomplete="${session.setup ? "new-password" : "current-password"}"`)}${!session.setup ? field("Authenticator code (if enabled)", "code", "", "text", 'inputmode="numeric"') : ""}${session.setup ? "<small>Use at least 12 characters. This becomes the owner account.</small>" : ""}<p class="form-error" role="alert"></p><button class="primary">${session.setup ? "Create workspace" : "Sign in"} →</button></form><a href="/book" class="text-btn">Here for an appointment? Book a visit ↗</a> · <a class="text-btn" href="/account?action=recover">Reset password</a><p class="footnote">Your workspace is private. Customers can book through your public booking page.</p></div></div>`;
   $("#auth-form").onsubmit = async (e) => {
     e.preventDefault();
     e.submitter.disabled = true;
@@ -986,12 +1123,14 @@ async function customer() {
 function renderCustomer() {
   const service = catalog.services.find((x) => x.id === booking.serviceId),
     locationInfo = catalog.locations.find((x) => x.id === booking.locationId);
-  app.innerHTML = `<div class="booking-page"><header><a class="brand" href="/book"><img src="/icon.svg" alt="">${esc(catalog.settings.name)}</a><a href="/" class="text-btn">Studio sign in ↗</a></header><main class="booking-layout"><aside><span class="eyebrow">LOOK GOOD. FEEL LIKE YOURSELF.</span><h1>Your next <br>great visit <br>starts here.</h1><p>Good people. Thoughtful service.<br>A little time, just for you.</p><div class="booking-flower" aria-hidden="true">✳</div><div class="studio-address"><b>${esc(locationInfo?.name)}</b><p>${esc(locationInfo?.address)}</p><small>All appointment times shown in ${esc(catalog.settings.timezone)}.</small></div></aside><section class="booking-form panel"><div class="section-head"><div><span class="eyebrow">BOOK YOUR VISIT</span><h2>Let's make time for you.</h2></div><span class="step-dot">1 / 2</span></div><form id="booking-form"><div class="form-grid">${select("Choose your studio", "locationId", catalog.locations, booking.locationId)}${select(
+  app.innerHTML = `<div class="booking-page"><header><a class="brand" href="/book"><img src="/icon.svg" alt="">${esc(catalog.settings.name)}</a><a href="/" class="text-btn">Studio sign in ↗</a><a class="text-btn" href="/portal">My appointments</a></header><main class="booking-layout"><aside><span class="eyebrow">LOOK GOOD. FEEL LIKE YOURSELF.</span><h1>Your next <br>great visit <br>starts here.</h1><p>Good people. Thoughtful service.<br>A little time, just for you.</p><div class="booking-flower" aria-hidden="true">✳</div><div class="studio-address"><b>${esc(locationInfo?.name)}</b><p>${esc(locationInfo?.address)}</p><small>All appointment times shown in ${esc(catalog.settings.timezone)}.</small></div></aside><section class="booking-form panel"><div class="section-head"><div><span class="eyebrow">BOOK YOUR VISIT</span><h2>Let's make time for you.</h2></div><span class="step-dot">1 / 2</span></div><form id="booking-form"><div class="form-grid">${select("Choose your studio", "locationId", catalog.locations, booking.locationId)}${select(
     "Your professional",
     "staffId",
-    catalog.staff.filter((s) => s.locationId === booking.locationId),
+    catalog.staff.filter((s) =>
+      (s.locationIds || [s.locationId]).includes(booking.locationId),
+    ),
     booking.staffId,
-  )}</div><h3>Choose your service</h3><div class="service-options">${catalog.services.map((s) => `<label class="service-option ${s.id === booking.serviceId ? "selected" : ""}"><input type="radio" name="serviceId" value="${s.id}" ${s.id === booking.serviceId ? "checked" : ""}><div><b>${esc(s.name)}</b><small>${s.duration} min</small></div><strong>${money(s.price)}</strong></label>`).join("")}</div><div class="form-grid spaced">${field("Pick a date", "date", booking.date, "date", "required")}<label>Available time<select name="start" required><option value="">Loading times…</option></select></label></div><h3>Your details</h3><div class="form-grid">${field("Full name", "name", booking.name || "", "text", 'required autocomplete="name" maxlength="120"')}${field("Email", "email", booking.email || "", "email", 'required autocomplete="email"')}${field("Phone (optional)", "phone", booking.phone || "", "tel", 'autocomplete="tel"')}<label class="check"><input type="checkbox" name="marketingConsent"> Keep me updated with studio offers</label></div><p class="booking-policy">Pay at your visit. Cancel online at least ${catalog.settings.cancelHours} hours ahead. Save your confirmation link to manage your appointment.</p><p class="form-error" role="alert"></p><button class="primary booking-submit">Confirm appointment · ${money(service?.price)} →</button></form></section></main><footer>Powered by Chairside <span>Good business. Better days.</span></footer></div>`;
+  )}</div><h3>Choose your service</h3><div class="service-options">${catalog.services.map((s) => `<label class="service-option ${s.id === booking.serviceId ? "selected" : ""}"><input type="radio" name="serviceId" value="${s.id}" ${s.id === booking.serviceId ? "checked" : ""}><div><b>${esc(s.name)}</b><small>${s.duration} min</small></div><strong>${money(s.price)}</strong></label>`).join("")}</div><label class="spaced">Additional services (optional)<select name="extraServices" multiple>${options(catalog.services.filter((s) => s.id !== booking.serviceId))}</select></label><div class="form-grid spaced">${field("Pick a date", "date", booking.date, "date", "required")}<label>Available time<select name="start" required><option value="">Loading times…</option></select></label></div><p><a class="text-btn" href="/waitlist">Can’t find a time? Join the waitlist →</a> · <a class="text-btn" href="/group">Book a group</a></p><h3>Your details</h3><div class="form-grid">${field("Full name", "name", booking.name || "", "text", 'required autocomplete="name" maxlength="120"')}${field("Email", "email", booking.email || "", "email", 'required autocomplete="email"')}${field("Phone (optional)", "phone", booking.phone || "", "tel", 'autocomplete="tel"')}<label class="check"><input type="checkbox" name="marketingConsent"> Keep me updated with studio offers</label></div><p class="booking-policy">Pay at your visit. Cancel online at least ${catalog.settings.cancelHours} hours ahead. Save your confirmation link to manage your appointment.</p><p class="form-error" role="alert"></p><button class="primary booking-submit">Confirm appointment · ${money(service?.price)} →</button></form></section></main><footer>Powered by Chairside <span>Good business. Better days.</span></footer></div>`;
   const form = $("#booking-form");
   let slotRequest = 0;
   const loadSlots = async () => {
@@ -1002,6 +1141,12 @@ function renderCustomer() {
         locationId: form.elements.locationId.value,
         staffId: form.elements.staffId.value,
         serviceId: form.elements.serviceId.value,
+        serviceIds: [
+          form.elements.serviceId.value,
+          ...Array.from(form.elements.extraServices?.selectedOptions || []).map(
+            (o) => o.value,
+          ),
+        ].join(","),
         date: form.elements.date.value,
       });
       const slots = await api("/public/availability?" + query);
@@ -1020,6 +1165,29 @@ function renderCustomer() {
     renderCustomer();
   };
   form.elements.staffId.onchange = loadSlots;
+  if (form.elements.extraServices)
+    form.elements.extraServices.onchange = () => {
+      const ids = [
+        form.elements.serviceId.value,
+        ...Array.from(form.elements.extraServices.selectedOptions).map(
+          (o) => o.value,
+        ),
+      ];
+      form.querySelector(".booking-submit").textContent =
+        "Confirm appointment · " +
+        money(
+          catalog.services
+            .filter((s) => ids.includes(s.id))
+            .reduce(
+              (n, s) =>
+                n +
+                (s.locationPrices?.[form.elements.locationId.value] ?? s.price),
+              0,
+            ),
+        ) +
+        " →";
+      loadSlots();
+    };
   form.elements.date.onchange = loadSlots;
   form.querySelectorAll('[name="serviceId"]').forEach(
     (r) =>
@@ -1035,6 +1203,12 @@ function renderCustomer() {
     try {
       const data = Object.fromEntries(new FormData(form));
       data.marketingConsent = data.marketingConsent === "on";
+      data.serviceIds = [
+        data.serviceId,
+        ...Array.from(form.elements.extraServices?.selectedOptions || []).map(
+          (o) => o.value,
+        ),
+      ];
       const result = await send("/public/book", data);
       location.href = "/manage#" + result.manageToken;
     } catch (err) {
@@ -1049,7 +1223,7 @@ async function manage() {
   if (!/^[a-f0-9]{48}$/.test(token))
     throw Error("This confirmation link is invalid.");
   const a = await api("/public/appointment/" + token);
-  app.innerHTML = `<div class="confirmation"><a class="brand" href="/book"><img src="/icon.svg" alt="">chairside</a><section class="panel"><div class="confirmation-icon">${a.status === "cancelled" ? "×" : "✓"}</div><span class="eyebrow">${a.status === "cancelled" ? "APPOINTMENT CANCELLED" : "YOUR VISIT, CONFIRMED"}</span><h1>${a.status === "cancelled" ? "See you another time." : "You're on the books."}</h1><p>${esc(a.service)} with ${esc(a.staff)}</p><h2>${fullDate(a.start)} at ${time(a.start)}</h2><p>${esc(catalog.settings.timezone)}</p>${badge(a.status)}<div class="notice">Bookmark this private link to manage your visit. Confirmation email delivery is not connected yet.</div>${a.status === "confirmed" ? '<button class="secondary danger" id="cancel-booking">Cancel appointment</button>' : ""}<a class="primary" href="/book">Book another visit →</a><p id="manage-error" role="alert"></p></section></div>`;
+  app.innerHTML = `<div class="confirmation"><a class="brand" href="/book"><img src="/icon.svg" alt="">chairside</a><section class="panel"><div class="confirmation-icon">${a.status === "cancelled" ? "×" : "✓"}</div><span class="eyebrow">${a.status === "cancelled" ? "APPOINTMENT CANCELLED" : "YOUR VISIT, CONFIRMED"}</span><h1>${a.status === "cancelled" ? "See you another time." : "You're on the books."}</h1><p>${esc(a.service)} with ${esc(a.staff)}</p><h2>${fullDate(a.start)} at ${time(a.start)}</h2><p>${esc(catalog.settings.timezone)}</p>${badge(a.status)}<div class="notice">Bookmark this private link to manage your visit. Use it to reschedule or cancel within studio policy.</div>${a.status === "confirmed" ? `<a class="secondary" href="/reschedule#${token}">Reschedule</a><button class="secondary danger" id="cancel-booking">Cancel appointment</button>` : ""}<a class="primary" href="/book">Book another visit →</a><p id="manage-error" role="alert"></p></section></div>`;
   $("#cancel-booking")?.addEventListener("click", () => {
     showModal(
       "Cancel your appointment?",
@@ -1066,12 +1240,49 @@ async function manage() {
     };
   });
 }
+extension = extensions({
+  state,
+  api,
+  send,
+  esc,
+  money,
+  field,
+  select,
+  options,
+  modalForm,
+  showModal,
+  toast,
+  refresh,
+  find,
+  avatar,
+  time,
+  fullDate,
+});
 (async () => {
   try {
-    if (location.pathname === "/book") await customer();
+    if (
+      [
+        "/account",
+        "/portal",
+        "/portal/book",
+        "/studio",
+        "/unsubscribe",
+        "/group",
+        "/waitlist",
+        "/reschedule",
+      ].includes(location.pathname)
+    )
+      await standalone(
+        { api, send, esc, money, field, select, options, toast },
+        location.pathname,
+      );
+    else if (location.pathname === "/book") await customer();
     else if (location.pathname === "/manage") await manage();
     else await auth();
   } catch (e) {
     app.innerHTML = `<div class="confirmation"><section class="panel"><h1>We couldn't load this page.</h1><p>${esc(e.message)}</p><a class="primary" href="/">Return to workspace</a></section></div>`;
   }
 })();
+
+if ("serviceWorker" in navigator)
+  navigator.serviceWorker.register("/sw.js").catch(() => {});

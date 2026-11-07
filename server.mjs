@@ -1,3 +1,23 @@
+import { issueGift } from "./lib/commerce.mjs";
+import { extendRecurrences } from "./lib/recurrence.mjs";
+import { matchWaitlist } from "./lib/waitlist.mjs";
+import { createOrder, settle } from "./lib/commerce.mjs";
+import {
+  extendedRoute,
+  legacyGuard,
+  scopedData,
+  checkAppointmentScope,
+  reschedule,
+} from "./lib/routes.mjs";
+import {
+  access,
+  checkMFA,
+  rateLimit,
+  canAppointment,
+  requireRole,
+} from "./lib/security.mjs";
+import { bookingMessages, runOutbox } from "./lib/messaging.mjs";
+import { extraSchemas, validateExtra } from "./lib/records.mjs";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -18,41 +38,50 @@ import {
   transaction,
   bookSeries,
   sellProduct,
+  zonedInstant,
 } from "./db.mjs";
 const db = openDB();
-seed(db);
+if (process.env.NODE_ENV !== "production" || process.env.SEED_DEMO === "true")
+  seed(db);
+else if (!get(db, "settings", "business"))
+  put(
+    db,
+    "settings",
+    {
+      name: "My Studio",
+      timezone: "America/New_York",
+      currency: "USD",
+      cancelHours: 24,
+      bookingDays: 60,
+      loyaltyPointsPerDollar: 1,
+      taxBasisPoints: 0,
+    },
+    "business",
+  );
 if (
   process.env.NODE_ENV === "production" &&
   !db.prepare("SELECT id FROM users LIMIT 1").get() &&
   !process.env.SETUP_TOKEN
 )
   throw Error("Set SETUP_TOKEN before starting production for the first time.");
+if (
+  process.env.NODE_ENV === "production" &&
+  (!process.env.APP_SECRET || process.env.APP_SECRET.length < 32)
+)
+  throw Error("APP_SECRET must contain at least 32 characters in production.");
 const root = fileURLToPath(new URL("./public/", import.meta.url));
-const attempts = new Map();
 function throttle(key, max = 30) {
-  const now = Date.now(),
-    entry = attempts.get(key) || { count: 0, until: now + 60000 };
-  if (entry.until < now) {
-    entry.count = 0;
-    entry.until = now + 60000;
-  }
-  entry.count++;
-  attempts.set(key, entry);
-  if (attempts.size > 10000)
-    for (const [k, v] of attempts) if (v.until < now) attempts.delete(k);
-  if (entry.count > max)
-    throw Object.assign(Error("Too many requests. Try again in a minute."), {
-      status: 429,
-    });
+  return rateLimit(db, key, max);
 }
 function fail(message, status = 400) {
   throw Object.assign(Error(message), { status });
 }
 async function body(req) {
+  if (req.parsedBody) return req.parsedBody;
   let text = "";
   for await (const chunk of req) {
     text += chunk;
-    if (text.length > 64000) fail("Request too large.", 413);
+    if (text.length > 1500000) fail("Request too large.", 413);
   }
   try {
     return JSON.parse(text || "{}");
@@ -61,12 +90,45 @@ async function body(req) {
   }
 }
 const schemas = {
-  locations: ["name", "address", "open", "close", "days"],
-  staff: ["name", "title", "color", "locationId", "commission", "active"],
-  services: ["name", "duration", "price", "category", "buffer", "active"],
+  ...extraSchemas,
+  locations: [
+    "name",
+    "address",
+    "open",
+    "close",
+    "days",
+    "timezone",
+    "taxBasisPoints",
+  ],
+  staff: [
+    "name",
+    "title",
+    "color",
+    "locationId",
+    "locationIds",
+    "commission",
+    "active",
+  ],
+  services: [
+    "name",
+    "duration",
+    "price",
+    "category",
+    "buffer",
+    "active",
+    "locationPrices",
+  ],
   clients: ["name", "email", "phone", "notes", "points", "marketingConsent"],
   products: ["name", "price", "stock", "reorderAt"],
-  memberships: ["name", "price", "credits", "description", "active"],
+  memberships: [
+    "name",
+    "price",
+    "credits",
+    "description",
+    "active",
+    "stripePriceId",
+    "serviceIds",
+  ],
   campaigns: ["name", "subject", "body", "status", "audience"],
   waitlist: [
     "name",
@@ -86,6 +148,7 @@ const schemas = {
     "cancelHours",
     "bookingDays",
     "loyaltyPointsPerDollar",
+    "taxBasisPoints",
   ],
   giftcards: ["name", "code", "balance"],
   subscriptions: ["name", "clientId", "membershipId", "credits", "status"],
@@ -204,6 +267,33 @@ function validateRecord(kind, input) {
     )
       fail("This block overlaps an appointment.");
   }
+  if (data.timezone) {
+    try {
+      new Intl.DateTimeFormat("en", { timeZone: data.timezone });
+    } catch {
+      fail("Invalid timezone.");
+    }
+  }
+  if (
+    data.taxBasisPoints !== undefined &&
+    (!Number.isInteger(data.taxBasisPoints) ||
+      data.taxBasisPoints < 0 ||
+      data.taxBasisPoints > 5000)
+  )
+    fail("Tax rate must be between 0 and 5000 basis points.");
+  if (
+    kind === "staff" &&
+    data.locationIds &&
+    (!Array.isArray(data.locationIds) ||
+      data.locationIds.some((key) => !get(db, "locations", key)))
+  )
+    fail("Invalid location assignments.");
+  if (kind === "giftcards") {
+    data.code = String(data.code || "").toUpperCase();
+    if (!/^[A-Z0-9-]{8,64}$/.test(data.code))
+      fail("Use a gift code of 8–64 letters, numbers, or hyphens.");
+  }
+  if (extraSchemas[kind]) validateExtra(db, kind, { ...data, id: input.id });
   return data;
 }
 const server = createServer(async (req, res) => {
@@ -240,6 +330,7 @@ const server = createServer(async (req, res) => {
               ".css": "text/css",
               ".svg": "image/svg+xml",
               ".json": "application/json",
+              ".webmanifest": "application/manifest+json",
             }[extname(target)] || "application/octet-stream",
         });
         res.end(data);
@@ -269,6 +360,29 @@ const server = createServer(async (req, res) => {
           )
           .get(cookie, Date.now())
       : null;
+    if (user && access(db, user).disabled) fail("Account disabled.", 401);
+    if (
+      await extendedRoute({
+        db,
+        req,
+        res,
+        url,
+        user,
+        body,
+        send: (status, result, headers) => {
+          if (user && !["GET", "HEAD"].includes(req.method))
+            db.prepare("INSERT INTO audit VALUES(?,?,?,?,?)").run(
+              id(),
+              user.id,
+              req.method,
+              path,
+              new Date().toISOString(),
+            );
+          send(status, result, headers);
+        },
+      })
+    )
+      return;
     if (path === "/api/session" && req.method === "GET")
       return send(200, {
         user: user || null,
@@ -318,6 +432,12 @@ const server = createServer(async (req, res) => {
         )
           fail("Email or password is incorrect.", 401);
       }
+      const grant = access(db, account);
+      if (grant.disabled) fail("Account disabled.", 403);
+      if (!grant.verified)
+        fail("Verify your email or accept your invitation first.", 403);
+      if (grant.mfa_secret && !checkMFA(grant.mfa_secret, data.code))
+        fail("A valid authenticator code is required.", 401);
       const token = randomBytes(32).toString("hex");
       db.prepare("DELETE FROM sessions WHERE expires<?").run(Date.now());
       db.prepare("INSERT INTO sessions VALUES(?,?,?)").run(
@@ -353,6 +473,7 @@ const server = createServer(async (req, res) => {
     if (path === "/api/public/availability" && req.method === "GET") {
       throttle(`slots:${req.socket.remoteAddress}`, 120);
       const input = Object.fromEntries(url.searchParams);
+      if (input.serviceIds) input.serviceIds = input.serviceIds.split(",");
       if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date || "")) fail("Choose a date.");
       const slots = [];
       const day = Date.parse(input.date + "T00:00:00Z");
@@ -364,7 +485,9 @@ const server = createServer(async (req, res) => {
             start: start.toISOString(),
           });
           const p = new Intl.DateTimeFormat("en-CA", {
-            timeZone: get(db, "settings", "business").timezone,
+            timeZone:
+              get(db, "locations", input.locationId)?.timezone ||
+              get(db, "settings", "business").timezone,
             year: "numeric",
             month: "2-digit",
             day: "2-digit",
@@ -377,7 +500,12 @@ const server = createServer(async (req, res) => {
     }
     if (path === "/api/public/book" && req.method === "POST") {
       throttle(`book:${req.socket.remoteAddress}`, 10);
-      const a = book(db, await body(req), { publicBooking: true });
+      req.parsedBody = await body(req);
+      const a = transaction(db, () => {
+        const result = book(db, req.parsedBody, { publicBooking: true });
+        bookingMessages(db, result);
+        return result;
+      });
       return send(201, {
         id: a.id,
         start: a.start,
@@ -395,8 +523,29 @@ const server = createServer(async (req, res) => {
           id: a.id,
           start: a.start,
           status: a.status,
-          service: get(db, "services", a.service_id)?.name,
+          service: JSON.parse(
+            db
+              .prepare(
+                "SELECT service_ids FROM appointment_meta WHERE appointment_id=?",
+              )
+              .get(a.id)?.service_ids || JSON.stringify([a.service_id]),
+          )
+            .map((id) => get(db, "services", id)?.name)
+            .join(" + "),
+          serviceIds: JSON.parse(
+            db
+              .prepare(
+                "SELECT service_ids FROM appointment_meta WHERE appointment_id=?",
+              )
+              .get(a.id)?.service_ids || JSON.stringify([a.service_id]),
+          ),
           staff: get(db, "staff", a.staff_id)?.name,
+          locationId: a.location_id,
+          serviceId: a.service_id,
+          staffId: a.staff_id,
+          timezone:
+            get(db, "locations", a.location_id)?.timezone ||
+            get(db, "settings", "business").timezone,
         });
       if (req.method === "POST") {
         const policy = get(db, "settings", "business");
@@ -414,6 +563,7 @@ const server = createServer(async (req, res) => {
       }
     }
     if (!user) fail("Sign in to continue.", 401);
+    legacyGuard(db, user, path, req.method);
     if (path === "/api/data" && req.method === "GET") {
       const data = Object.fromEntries(
         Object.keys(schemas).map((kind) => [kind, list(db, kind)]),
@@ -432,11 +582,25 @@ const server = createServer(async (req, res) => {
       data.audit = db
         .prepare("SELECT * FROM audit ORDER BY created DESC LIMIT 100")
         .all();
-      return send(200, data);
+      data.appointments = data.appointments.map((a) => ({
+        ...a,
+        ...(db
+          .prepare(
+            "SELECT series_id,resource_id,service_ids FROM appointment_meta WHERE appointment_id=?",
+          )
+          .get(a.id) || {}),
+      }));
+      return send(200, scopedData(db, user, data));
     }
     let result;
     if (path === "/api/appointments" && req.method === "POST") {
-      const records = bookSeries(db, await body(req));
+      const input = await body(req);
+      checkAppointmentScope(db, user, input);
+      const records = transaction(db, () => {
+        const rows = bookSeries(db, input);
+        rows.forEach((a) => bookingMessages(db, a));
+        return rows;
+      });
       result = records.map(({ token, ...a }) => a);
     } else if (
       /^\/api\/appointments\/[^/]+$/.test(path) &&
@@ -446,32 +610,46 @@ const server = createServer(async (req, res) => {
         data = await body(req),
         a = db.prepare("SELECT * FROM appointments WHERE id=?").get(key);
       if (!a) fail("Appointment not found.", 404);
-      if (data.start) {
+      if (!canAppointment(db, user, a)) fail("Not allowed.", 403);
+      if (
+        db
+          .prepare(
+            "SELECT id FROM orders WHERE appointment_id=? AND status='pending' AND stripe_session IS NOT NULL",
+          )
+          .get(a.id)
+      )
+        fail(
+          "A payment is in progress. Wait for completion or expiration before changing this visit.",
+        );
+      if (data.start || data.localDate) {
         if (!["confirmed", "checked-in"].includes(a.status))
           fail("Only active appointments can be moved.");
-        transaction(db, () => {
-          const slot = validateSlot(
-            db,
-            {
-              locationId: a.location_id,
-              staffId: a.staff_id,
-              serviceId: a.service_id,
-              start: data.start,
-            },
-            key,
-          );
-          db.prepare("UPDATE appointments SET start=?,end=? WHERE id=?").run(
-            slot.start,
-            slot.end,
-            key,
-          );
-        });
+        const desired = data.localDate
+          ? zonedInstant(
+              data.localDate,
+              data.minute,
+              get(db, "locations", a.location_id)?.timezone ||
+                get(db, "settings", "business").timezone,
+            )
+          : data.start;
+        reschedule(db, a, desired);
       } else {
         if (
           !["confirmed", "checked-in"].includes(a.status) ||
-          !["checked-in", "cancelled", "no-show"].includes(data.status)
+          !["checked-in", "cancelled", "no-show", "completed"].includes(
+            data.status,
+          )
         )
           fail("Invalid appointment transition.");
+        if (
+          data.status === "completed" &&
+          !db
+            .prepare(
+              "SELECT id FROM orders WHERE appointment_id=? AND status='paid'",
+            )
+            .get(a.id)
+        )
+          fail("Collect payment before completing this visit.");
         db.prepare("UPDATE appointments SET status=? WHERE id=?").run(
           data.status,
           key,
@@ -480,10 +658,24 @@ const server = createServer(async (req, res) => {
       result = { ok: true };
     } else if (path === "/api/sales" && req.method === "POST") {
       const data = await body(req);
-      result = sellProduct(db, data.productId, data.quantity);
+      const order = createOrder(
+        db,
+        {
+          locationId: data.locationId || list(db, "locations")[0]?.id,
+          items: [{ productId: data.productId, quantity: data.quantity }],
+        },
+        id(),
+      );
+      result = settle(db, order.id, [{ method: "cash", amount: order.total }]);
     } else if (path === "/api/checkout" && req.method === "POST") {
       const data = await body(req);
-      result = checkout(db, data.appointmentId, data.tip, data.method);
+      if (data.method !== "cash") fail("Use secure card checkout.");
+      const order = createOrder(
+        db,
+        { appointmentId: data.appointmentId, tip: data.tip },
+        id(),
+      );
+      result = settle(db, order.id, [{ method: "cash", amount: order.total }]);
     } else if (
       /^\/api\/records\/[^/]+(?:\/[^/]+)?$/.test(path) &&
       ["POST", "PATCH", "DELETE"].includes(req.method)
@@ -499,12 +691,24 @@ const server = createServer(async (req, res) => {
         const old = key ? get(db, kind, key) : null;
         if (key && !old) fail("Record not found.", 404);
         const data = validateRecord(kind, { ...old, ...(await body(req)) });
-        result = put(
-          db,
-          kind,
-          data,
-          key || (kind === "settings" ? "business" : undefined),
-        );
+        if (kind === "products" && old && data.stock !== old.stock)
+          fail("Use Operations → Adjust / transfer to change existing stock.");
+        if (kind === "giftcards" && old && data.balance !== old.balance)
+          fail("Gift balances change through checkout and refunds.");
+        result =
+          kind === "giftcards" && !old
+            ? issueGift(db, data)
+            : put(
+                db,
+                kind,
+                data,
+                key ||
+                  (kind === "settings"
+                    ? "business"
+                    : kind === "branding"
+                      ? "brand"
+                      : undefined),
+              );
       }
     } else fail("Not found.", 404);
     db.prepare("INSERT INTO audit VALUES(?,?,?,?,?)").run(
@@ -516,7 +720,14 @@ const server = createServer(async (req, res) => {
     );
     send(200, result);
   } catch (e) {
-    send(e.status || 400, { error: e.message || "Request failed." });
+    const internal = String(e.code || "").startsWith("ERR_SQLITE");
+    if (internal)
+      console.error(JSON.stringify({ event: "database_error", code: e.code }));
+    send(e.status || (internal ? 409 : 400), {
+      error: internal
+        ? "This change conflicts with an existing record."
+        : e.message || "Request failed.",
+    });
   }
 });
 server.listen(
@@ -527,3 +738,46 @@ server.listen(
       `Chairside ready at http://${process.env.HOST || "127.0.0.1"}:${process.env.PORT || 3000}`,
     ),
 );
+
+let processing = false;
+const worker =
+  process.env.RUN_WORKER === "true"
+    ? setInterval(async () => {
+        if (processing) return;
+        processing = true;
+        try {
+          for (const [name, job] of [
+            ["recurrences", () => extendRecurrences(db)],
+            ["waitlist", () => matchWaitlist(db)],
+            ["outbox", () => runOutbox(db)],
+          ]) {
+            try {
+              await job();
+            } catch (e) {
+              console.error(
+                JSON.stringify({
+                  event: "worker_job_error",
+                  job: name,
+                  message: e.message,
+                }),
+              );
+            }
+          }
+        } catch (e) {
+          console.error(
+            JSON.stringify({ event: "worker_error", message: e.message }),
+          );
+        } finally {
+          processing = false;
+        }
+      }, 15000)
+    : null;
+for (const signal of ["SIGTERM", "SIGINT"])
+  process.on(signal, () => {
+    if (worker) clearInterval(worker);
+    server.close(() => {
+      db.close();
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(1), 10000).unref();
+  });
