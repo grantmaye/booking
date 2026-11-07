@@ -30,6 +30,10 @@ For development with a separate database, run `npm start` and create the first o
 - Commission snapshots, timesheets, date/location reports, branding, public portfolio uploads and an installable web manifest.
 - Versioned migrations, Docker/Caddy deployment, persistent volumes, health checks, online backups, safe restore, CI and fresh-production smoke tests.
 
+## Marketing and analytics
+
+The workspace now includes campaign templates, audience segments, draft editing, scheduled email, delivery/open/click reporting, booking-source analytics, a tracked-link builder and CSV export. The Integrations directory provides setup panels for Resend, Stripe, consent-gated Google Analytics 4, the Twilio transport and CSV workflows. See [marketing setup and reporting definitions](docs/MARKETING.md).
+
 ## Deploy
 
 Use one application instance on a VM/container host with persistent storage. This is a single-business application with multiple locations, not a hosted multi-tenant SaaS.

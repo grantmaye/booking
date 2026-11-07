@@ -31,3 +31,7 @@ AI telephone reception/call routing, financing/underwriting, bank onboarding/pay
 Amounts use integer USD cents. Server-side calculations and transactions control inventory, gift balances, points and credits. Cash actions record funds already collected. Card orders become paid only after a verified Stripe webhook with the matching currency/amount. Returning to the success URL never fulfills an order. Online payment and service completion are separate states.
 
 Deposits are separate payment orders and reduce the remaining checkout balance without reducing the taxable service amount. Reports show cash collected in the order-created date window, including deposits; gift issuance is excluded from earned sales and balances are reported as a liability. This is an operational report, not accrual accounting or tax filing. Configure the correct location tax rate for your business; automatic tax determination is not enabled.
+
+## Marketing expansion
+
+Dedicated Marketing, Marketing analytics and Integrations navigation now provides segmented campaign templates, editable drafts, scheduling/cancellation, signed engagement reporting, tracked booking links, source/date analytics, CSV export and optional consent-gated Google Analytics 4. See [MARKETING.md](MARKETING.md) for definitions, configuration and exact integration boundaries.

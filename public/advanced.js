@@ -1,3 +1,4 @@
+import { growthTools } from "./marketing.js";
 import { scheduleExtension } from "./schedule.js";
 export function extensions(ctx) {
   const {
@@ -21,6 +22,7 @@ export function extensions(ctx) {
   const $ = (s) => document.querySelector(s),
     modal = $("#modal");
   const schedule = scheduleExtension(ctx);
+  const growth = growthTools(ctx);
   const ops = () => state.ops || {};
   const panel = (title, body, button = "") =>
     `<section class="panel"><div class="section-head"><h2>${title}</h2>${button}</div>${body}</section>`;
@@ -799,6 +801,7 @@ export function extensions(ctx) {
   }
   function bind() {
     schedule.bind();
+    growth.bind();
     document
       .querySelectorAll("[data-extra]")
       .forEach((b) => (b.onclick = () => dispatch(b.dataset.extra)));
@@ -849,6 +852,7 @@ export function extensions(ctx) {
       Messages: messages,
       Analytics: analytics,
       Tools: adminTools,
+      ...growth.pages,
     },
     bind,
   };

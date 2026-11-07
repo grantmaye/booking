@@ -596,3 +596,136 @@ footer {
     border: 0;
   }
 }
+/* Marketing workspace */
+.marketing-templates,
+.integration-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+.marketing-templates .panel {
+  border-top: 4px solid var(--ink);
+}
+.integration-card {
+  padding: 28px;
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 12px;
+}
+.integration-card p {
+  flex: 1;
+}
+.integration-card h2 {
+  font-size: 28px;
+  margin: 0;
+}
+.integration-card .eyebrow {
+  margin: 0;
+}
+.integration-monogram {
+  width: 54px;
+  height: 54px;
+  background: var(--ink);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+.analytics-bars {
+  padding: 24px;
+  max-height: 360px;
+  overflow: auto;
+}
+.analytics-bar {
+  display: grid;
+  grid-template-columns: 110px 1fr 35px;
+  align-items: center;
+  gap: 15px;
+  margin: 12px 0;
+  font-size: 12px;
+}
+.analytics-bar > div {
+  background: #eaecdf;
+  height: 18px;
+}
+.analytics-bar i {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+  border-right: 5px solid var(--accent);
+}
+.campaign-preview {
+  background: var(--paper);
+  padding: 20px;
+  white-space: pre-wrap;
+}
+.setup-steps {
+  padding-left: 22px;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.setup-steps li {
+  margin: 12px 0;
+}
+.setup-requirements p {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.setup-requirements code {
+  overflow-wrap: anywhere;
+}
+.privacy-choice {
+  position: fixed;
+  bottom: 12px;
+  left: 12px;
+  z-index: 20;
+  font-size: 11px;
+}
+.consent-panel {
+  position: fixed;
+  bottom: 70px;
+  left: 16px;
+  max-width: 440px;
+  width: calc(100% - 32px);
+  z-index: 30;
+  background: var(--white);
+  border: 2px solid var(--ink);
+  padding: 24px;
+  box-shadow: 6px 6px 0 #17191633;
+}
+.consent-panel strong {
+  font-size: 22px;
+}
+.consent-panel p {
+  margin-top: 12px;
+}
+.consent-panel > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+@media (max-width: 1100px) {
+  .marketing-templates,
+  .integration-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .marketing-templates,
+  .integration-grid {
+    grid-template-columns: 1fr;
+  }
+  .analytics-bar {
+    grid-template-columns: 85px 1fr 25px;
+    gap: 10px;
+  }
+  .integration-card {
+    padding: 22px;
+  }
+}

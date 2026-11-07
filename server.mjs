@@ -309,7 +309,7 @@ const server = createServer(async (req, res) => {
   res.setHeader("Referrer-Policy", "same-origin");
   res.setHeader(
     "Content-Security-Policy",
-    "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'",
+    "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' https://www.googletagmanager.com; connect-src 'self' https://*.google-analytics.com https://analytics.google.com https://www.googletagmanager.com; img-src 'self' data: https://*.google-analytics.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self'",
   );
   try {
     const url = new URL(req.url, "http://localhost"),

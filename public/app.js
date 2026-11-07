@@ -1,3 +1,8 @@
+import {
+  initAnalytics,
+  trackBooking,
+  bookingAttribution,
+} from "./analytics.js";
 import { extensions, standalone } from "./advanced.js";
 let extension;
 const $ = (s) => document.querySelector(s),
@@ -44,6 +49,9 @@ const icons = {
   Studio: "✺",
   Messages: "✉",
   Tools: "⊞",
+  Marketing: "↗",
+  "Marketing analytics": "▥",
+  Integrations: "⌘",
 };
 async function api(path, options = {}) {
   const r = await fetch("/api" + path, {
@@ -150,6 +158,11 @@ async function refresh() {
     state.ops = await api("/operations");
   if (["owner", "manager"].includes(state.user.role))
     state.accounts = await api("/team/access");
+  if (["owner", "manager"].includes(state.user.role))
+    [state.marketing, state.integrations] = await Promise.all([
+      api("/marketing?" + new URLSearchParams(state.marketingRange || {})),
+      api("/integrations"),
+    ]);
   render();
 }
 function appointments() {
@@ -396,7 +409,7 @@ function settings() {
     )
     .join(
       "",
-    )}</section><section class="panel"><div class="section-head"><h2>Locations</h2><button class="text-btn" data-edit="locations">＋ Add location</button></div>${state.data.locations.map((l) => `<div class="list-row"><div><b>${esc(l.name)}</b><small>${esc(l.address)}<br>${l.open}:00–${l.close}:00</small></div><button class="text-btn" data-edit="locations:${l.id}">Edit →</button></div>`).join("")}</section><section class="panel"><div class="section-head"><h2>Integration readiness</h2></div>${["Card payments & deposits", "Email & SMS delivery", "Bank payouts & payroll", "Google / Instagram integrations"].map((name) => `<div class="list-row"><span>${name}</span>${badge("not-connected")}</div>`).join("")}</section><section class="panel"><div class="section-head"><h2>Recent activity</h2></div>${
+    )}</section><section class="panel"><div class="section-head"><h2>Locations</h2><button class="text-btn" data-edit="locations">＋ Add location</button></div>${state.data.locations.map((l) => `<div class="list-row"><div><b>${esc(l.name)}</b><small>${esc(l.address)}<br>${l.open}:00–${l.close}:00</small></div><button class="text-btn" data-edit="locations:${l.id}">Edit →</button></div>`).join("")}</section><section class="panel"><div class="section-head"><h2>Integration readiness</h2></div>${(state.integrations?.items || []).map((i) => `<div class="list-row"><span>${esc(i.name)}</span>${badge(i.limited ? "transport-only" : i.configured ? "configured" : "setup-required")}</div>`).join("")}<div class="padded"><button class="secondary" data-nav="Integrations">Manage integrations →</button></div></section><section class="panel"><div class="section-head"><h2>Recent activity</h2></div>${
     state.data.audit
       .slice(0, 6)
       .map(
@@ -418,11 +431,22 @@ function render() {
     Checkout: extension.pages.POS,
     Inventory: inventory,
     Growth: growth,
+    Marketing: extension.pages.Marketing,
+    "Marketing analytics": extension.pages["Marketing analytics"],
+    Integrations: extension.pages.Integrations,
     Reports: extension.pages.Analytics,
     Settings: settings,
     ...Object.fromEntries(
       Object.entries(extension.pages).filter(
-        ([key]) => !["Schedule", "POS", "Analytics"].includes(key),
+        ([key]) =>
+          ![
+            "Schedule",
+            "POS",
+            "Analytics",
+            "Marketing",
+            "Marketing analytics",
+            "Integrations",
+          ].includes(key),
       ),
     ),
   };
@@ -468,6 +492,7 @@ function bind() {
         if (state.page === "Overview") state.date = dateKey(new Date());
         state.search = "";
         render();
+        window.scrollTo({ top: 0, behavior: "instant" });
       }),
   );
   document.querySelectorAll("[data-sale]").forEach(
@@ -1209,7 +1234,9 @@ function renderCustomer() {
           (o) => o.value,
         ),
       ];
+      data.attribution = bookingAttribution();
       const result = await send("/public/book", data);
+      trackBooking();
       location.href = "/manage#" + result.manageToken;
     } catch (err) {
       $(".form-error").textContent = err.message;
@@ -1279,6 +1306,7 @@ extension = extensions({
     else if (location.pathname === "/book") await customer();
     else if (location.pathname === "/manage") await manage();
     else await auth();
+    initAnalytics().catch(() => {});
   } catch (e) {
     app.innerHTML = `<div class="confirmation"><section class="panel"><h1>We couldn't load this page.</h1><p>${esc(e.message)}</p><a class="primary" href="/">Return to workspace</a></section></div>`;
   }

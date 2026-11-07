@@ -376,6 +376,19 @@ export function book(
       JSON.stringify(input.serviceIds || [input.serviceId]),
       slot.staff.commission,
     );
+    if (input.attribution && typeof input.attribution === "object") {
+      const clean = Object.fromEntries(
+        ["source", "medium", "campaign"].map((k) => [
+          k,
+          typeof input.attribution[k] === "string" &&
+          /^[a-zA-Z0-9 _.-]{1,80}$/.test(input.attribution[k])
+            ? input.attribution[k]
+            : "",
+        ]),
+      );
+      if (clean.source)
+        put(db, "attribution", { ...clean, created: now.toISOString() }, key);
+    }
     put(db, "notifications", {
       appointmentId: key,
       channel: "email",

@@ -34,3 +34,10 @@ Screenshots: `docs/screenshots/checkout.jpg`, `docs/screenshots/operations.jpg`,
 ## Not established by these checks
 
 No cloud deployment, live provider acceptance test, penetration test, load certification, statutory tax/payroll audit, or native-store distribution has been performed. Provider secrets are deliberately absent. Run the provider activation tests in `OPERATIONS.md` before accepting real payments or enabling delivery. GitHub CI independently repeats syntax, unit/HTTP tests, audit, container build and the release drill on each push.
+
+## Marketing expansion verification
+
+- 50 tests pass after the marketing and analytics additions; 33 JavaScript modules pass syntax checks.
+- Consent-gated Google loading is tested without contacting Google; source URLs omit query strings and private pages are excluded.
+- Browser verified template draft creation, source-link generation and integration setup guidance. Mobile Marketing width was 390px at a 390px viewport.
+- No external campaigns or provider connection changes were performed. Screenshots: `marketing.jpg` and `integrations.jpg` under `docs/screenshots/`.
