@@ -2,6 +2,16 @@
 
 ## Hosting
 
+### Render
+
+The root `render.yaml` provisions one paid Starter Docker service with a 1 GB persistent disk. Review Render's displayed price before creating it. Connect this repository as a Blueprint. Render generates independent `APP_SECRET` and `SETUP_TOKEN` values, enables the worker and provides HTTPS. The start command uses Render's assigned public URL as `PUBLIC_ORIGIN`; set that variable explicitly if you later add a custom domain.
+
+After the service becomes healthy, open its URL, retrieve `SETUP_TOKEN` from the private Render environment settings, and create your owner account. Configure real locations, staff and services before sharing `/book`. Production does not copy the local demo or its login. Add optional provider credentials in Render's environment settings using the instructions below. Keep the service at one instance and preserve its disk and `APP_SECRET` across deployments.
+
+Run online backups into `/app/data/backups/` and download them to separate storage; `/app/backups` is not persistent in this Render configuration. Verify a restart retains bookings before accepting customers. The Blueprint is deployment configuration, not evidence that a live deployment exists.
+
+### Other container hosts
+
 Node 24, one application process and a persistent local disk. SQLite uses WAL, foreign keys, a busy timeout, immediate write transactions and nested savepoints. Migrations run transactionally before serving traffic. Multiple branches/instances must not share the same database file. Ephemeral serverless filesystems are unsuitable.
 
 1. Copy `.env.example` to `.env` (ignored by Git).

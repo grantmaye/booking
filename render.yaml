@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: chairside-booking
+    runtime: docker
+    plan: starter
+    region: virginia
+    numInstances: 1
+    healthCheckPath: /api/health
+    dockerCommand: sh -c 'export PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-$RENDER_EXTERNAL_URL}"; exec node server.mjs'
+    disk:
+      name: chairside-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: "10000"
+      - key: DB_PATH
+        value: /app/data/chairside.sqlite
+      - key: RUN_WORKER
+        value: "true"
+      - key: SEED_DEMO
+        value: "false"
+      - key: APP_SECRET
+        generateValue: true
+      - key: SETUP_TOKEN
+        generateValue: true
