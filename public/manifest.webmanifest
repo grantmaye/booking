@@ -1,1 +1,18 @@
-{"id":"/","name":"Chairside Studio","short_name":"Chairside","start_url":"/studio","scope":"/","display":"standalone","background_color":"#f6f7f2","theme_color":"#183e36","icons":[{"src":"/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}]}
+{
+  "id": "/",
+  "name": "Chairside Studio",
+  "short_name": "Chairside",
+  "start_url": "/studio",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f2f1e9",
+  "theme_color": "#171916",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

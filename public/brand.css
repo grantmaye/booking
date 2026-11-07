@@ -1,0 +1,598 @@
+/* Chairside / Electric Editorial. Layout primitives live in style.css. */
+:root {
+  --ink: #171916;
+  --green: #171916;
+  --muted: #62665e;
+  --line: #d2d4c9;
+  --paper: #f2f1e9;
+  --lime: #dbff00;
+  --white: #fffef8;
+  --radius: 3px;
+  --accent: #dbff00;
+  --inverse: #f8f8ef;
+  --display: Impact, "Arial Narrow", "Helvetica Neue", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+::selection {
+  background: var(--accent);
+  color: var(--ink);
+}
+b {
+  font-weight: 700;
+}
+h1 {
+  font-weight: 850;
+  letter-spacing: -0.055em;
+}
+h2 {
+  font-weight: 750;
+  letter-spacing: -0.035em;
+}
+.eyebrow,
+.nav-label,
+th,
+.breadcrumb,
+footer,
+.stat > div,
+.schedule-cell > strong {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.eyebrow {
+  color: var(--ink);
+  font-size: 10px;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid #3357da;
+  outline-offset: 3px;
+}
+.primary,
+.secondary,
+.light-btn {
+  border-radius: 2px;
+  font-weight: 750;
+  min-height: 44px;
+  padding: 12px 18px;
+  transition:
+    background 0.15s,
+    box-shadow 0.15s,
+    transform 0.15s;
+}
+.primary,
+.light-btn {
+  background: var(--accent);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+.primary:hover,
+.light-btn:hover {
+  background: #e8ff69;
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--ink);
+}
+.primary:active,
+.light-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+.secondary {
+  background: var(--white);
+  border-color: var(--ink);
+}
+.secondary:hover {
+  background: var(--ink);
+  color: var(--inverse);
+}
+.text-btn {
+  color: var(--ink);
+  font-weight: 750;
+}
+.danger {
+  color: #a42d22;
+}
+.sidebar {
+  background: var(--ink);
+  color: var(--inverse);
+  border-right: 0;
+  padding-top: 27px;
+}
+.brand {
+  font-weight: 850;
+  letter-spacing: -0.065em;
+}
+.sidebar .brand {
+  color: var(--inverse);
+}
+.brand img {
+  border-radius: 0;
+}
+.workspace {
+  border-color: #484b41;
+  border-radius: 2px;
+  background: #242720;
+}
+.workspace small,
+.profile small {
+  color: #b7bcae;
+}
+.studio-mark {
+  color: var(--ink);
+  background: var(--accent);
+  border-radius: 0;
+  font-family: var(--display);
+}
+.nav-label {
+  color: #a6ad99;
+}
+.nav-item {
+  color: #cbd0c1;
+  border-radius: 2px;
+  font-weight: 600;
+}
+.nav-item > span {
+  color: inherit;
+}
+.nav-item:hover {
+  background: #30342a;
+  color: white;
+}
+.nav-item.active,
+.nav-item.active:hover {
+  background: var(--accent);
+  color: var(--ink);
+}
+.nav-item.active > span {
+  color: var(--ink);
+}
+.nav-item em {
+  background: var(--ink);
+  color: var(--accent);
+  border-radius: 0;
+}
+.connection {
+  color: #b7bcae;
+  border-color: #484b41;
+}
+.live-dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px #dbff0020;
+}
+.profile {
+  color: var(--inverse);
+}
+.topbar {
+  background: var(--paper);
+  border-bottom: 1px solid var(--ink);
+}
+.breadcrumb,
+.breadcrumb b,
+.topbar select,
+.today-label {
+  color: var(--ink);
+}
+main {
+  padding-top: 42px;
+}
+.welcome {
+  align-items: flex-end;
+  padding-bottom: 28px;
+  border-bottom: 2px solid var(--ink);
+}
+.welcome h1 {
+  font: 400 clamp(44px, 4.8vw, 80px)/0.97 var(--display);
+  text-transform: uppercase;
+  letter-spacing: -0.025em;
+  max-width: 770px;
+}
+.welcome .eyebrow::before {
+  content: "";
+  display: inline-block;
+  background: var(--ink);
+  width: 8px;
+  height: 8px;
+  margin-right: 9px;
+}
+.welcome p,
+.page-heading p {
+  font-size: 13px;
+  color: var(--muted);
+}
+.page-heading h1 {
+  font-size: clamp(30px, 3.3vw, 50px);
+  line-height: 1.05;
+  max-width: 850px;
+}
+.stats {
+  gap: 0;
+  border: 1px solid var(--ink);
+  background: var(--white);
+}
+.stat {
+  border: 0;
+  border-right: 1px solid var(--ink);
+  border-radius: 0;
+  background: transparent;
+  padding: 24px;
+}
+.stat:last-child {
+  border-right: 0;
+}
+.stat:first-child {
+  background: var(--accent);
+}
+.stat > div {
+  color: var(--ink);
+  font-size: 10px;
+}
+.stat > div > span {
+  background: transparent;
+  color: var(--ink);
+}
+.stat strong {
+  font: 400 clamp(36px, 3.8vw, 58px)/1 var(--display);
+  letter-spacing: -0.025em;
+  margin: 18px 0 12px;
+}
+.stat small {
+  color: #55594d;
+}
+.panel {
+  background: var(--white);
+  border-color: var(--line);
+}
+.section-head {
+  border-bottom: 1px solid var(--line);
+}
+.section-head h2 {
+  font-size: 19px;
+}
+.count {
+  background: var(--ink);
+  color: var(--accent);
+  border-radius: 1px;
+}
+th {
+  color: #55594d;
+  background: #eaece1;
+  font-size: 10px;
+}
+td {
+  color: #55594d;
+  border-bottom-color: var(--line);
+  font-size: 12px;
+}
+td b {
+  color: var(--ink);
+}
+tr:hover td {
+  background: #f2f4e8;
+}
+.spotlight {
+  background: var(--ink);
+  color: var(--inverse);
+  border-radius: 2px;
+}
+.spotlight .eyebrow,
+.spotlight p {
+  color: #c6cbbb;
+}
+.spotlight h2 {
+  font: 400 44px/0.98 var(--display);
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+}
+.spotlight .decorative {
+  color: var(--accent);
+  opacity: 0.22;
+}
+.avatar {
+  color: #303628;
+  border: 1px solid #17191622;
+  border-radius: 4px;
+  font-weight: 750;
+}
+.badge {
+  border-radius: 2px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.badge.confirmed {
+  background: #e9f1bd;
+  color: #34420b;
+}
+.badge.completed,
+.badge.active {
+  background: #d9e9df;
+  color: #205233;
+}
+.badge.cancelled,
+.badge.no-show {
+  background: #f7dfd8;
+  color: #8b2c21;
+}
+.notice {
+  background: #e9eddb;
+  border: 1px solid #c7cfb3;
+  border-left: 4px solid var(--ink);
+  color: #3c4430;
+  border-radius: 2px;
+}
+input,
+select,
+textarea {
+  border-radius: 2px;
+  border-color: #aeb3a2;
+  background-color: var(--white);
+  color: var(--ink);
+}
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--ink);
+}
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--ink);
+}
+dialog {
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+  box-shadow: 12px 12px 0 #17191655;
+}
+dialog::backdrop {
+  background: #17191699;
+  backdrop-filter: blur(3px);
+}
+.modal-head {
+  border-bottom: 2px solid var(--ink);
+}
+.modal-head h2 {
+  font-size: 24px;
+}
+.schedule-grid {
+  border-color: var(--ink);
+  background: var(--line);
+  gap: 1px;
+}
+.schedule-cell {
+  background: var(--white);
+  border: 0;
+}
+.schedule-cell > strong {
+  color: var(--ink);
+}
+.schedule-booking {
+  border-radius: 2px;
+  background: #edf1d8;
+  border-left: 4px solid var(--ink);
+  color: var(--ink);
+}
+.schedule-booking small {
+  color: #4f5840;
+}
+.schedule-cell.drag-over {
+  background: #e7ff73;
+}
+/* The public experience shares the same typography, paper and accent. */
+.booking-page,
+.portal-shell {
+  background: var(--paper);
+}
+.booking-page > header,
+.portal-shell > header {
+  border-bottom: 2px solid var(--ink);
+  background: var(--paper);
+}
+.booking-layout {
+  max-width: 1440px;
+  gap: 6%;
+  padding-top: 48px;
+}
+.booking-layout > aside h1,
+.auth-story h1,
+.studio-hero + h1 {
+  font: 400 clamp(62px, 6.5vw, 108px)/0.92 var(--display);
+  text-transform: uppercase;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+}
+.booking-layout > aside {
+  padding-top: 12px;
+}
+.booking-layout > aside h1 {
+  margin-bottom: 28px;
+}
+.booking-flower {
+  color: var(--ink);
+  background: var(--accent);
+  width: 150px;
+  height: 150px;
+  display: grid;
+  place-items: center;
+  font-size: 136px;
+  line-height: 1;
+  border: 1px solid var(--ink);
+  transform: rotate(-8deg);
+  margin: 36px 0;
+}
+.studio-address {
+  border-top: 2px solid var(--ink);
+}
+.booking-form {
+  border: 1px solid var(--ink);
+  box-shadow: 8px 8px 0 #d9ddc9;
+}
+.booking-form .section-head {
+  background: var(--ink);
+  color: var(--inverse);
+}
+.booking-form .section-head .eyebrow {
+  color: var(--accent);
+}
+.booking-form .section-head h2 {
+  font-size: 27px;
+}
+.step-dot {
+  border-color: var(--accent);
+  color: var(--accent);
+  border-radius: 0;
+}
+.service-option {
+  border-radius: 2px;
+  border-color: var(--line);
+}
+.service-option.selected {
+  background: #eff7c5;
+  border: 2px solid var(--ink);
+}
+.service-option strong {
+  color: var(--ink);
+}
+.auth-story {
+  background: var(--ink);
+  color: var(--inverse);
+}
+.auth-story h1 {
+  color: var(--inverse);
+}
+.auth-story .brand {
+  color: var(--inverse);
+}
+.auth-story .eyebrow {
+  color: var(--accent);
+}
+.auth-story p {
+  color: #c6cbbb;
+}
+.auth-art {
+  color: var(--accent);
+  opacity: 0.16;
+}
+.auth-form h1,
+.confirmation h1 {
+  font: 400 56px/0.98 var(--display);
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+}
+.confirmation-icon {
+  background: var(--accent);
+  color: var(--ink);
+  border-radius: 0;
+}
+.portal-shell > main > h1 {
+  font: 400 clamp(48px, 6vw, 88px)/0.98 var(--display);
+  text-transform: uppercase;
+  letter-spacing: -0.025em;
+}
+.studio-hero {
+  background: var(--ink);
+  color: var(--inverse);
+  padding: 40px;
+  border-left: 12px solid var(--accent);
+}
+.studio-hero > p {
+  color: #d4d8cc;
+  max-width: 650px;
+}
+.studio-hero .secondary {
+  color: var(--ink);
+}
+footer {
+  color: #62665e;
+  font-size: 9px;
+}
+@media (max-width: 850px) {
+  .welcome h1 {
+    font-size: 48px;
+  }
+  .stat {
+    padding: 18px;
+  }
+  .stat strong {
+    font-size: 40px;
+  }
+  .booking-layout > aside h1 {
+    font-size: 68px;
+  }
+}
+@media (max-width: 600px) {
+  main {
+    padding-top: 25px;
+  }
+  .welcome {
+    align-items: flex-start;
+    gap: 18px;
+  }
+  .welcome h1 {
+    font-size: 46px;
+  }
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .stat {
+    border-bottom: 1px solid var(--ink);
+  }
+  .stat:nth-child(2) {
+    border-right: 0;
+  }
+  .stat:nth-child(n + 3) {
+    border-bottom: 0;
+  }
+  .stat strong {
+    font-size: 38px;
+  }
+  .page-heading h1 {
+    font-size: 32px;
+  }
+  .booking-page > header {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .booking-layout > aside h1 {
+    font-size: 60px;
+  }
+  .booking-flower {
+    display: none;
+  }
+  .booking-form {
+    box-shadow: 4px 4px 0 #d9ddc9;
+  }
+  .portal-shell > header {
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+  .studio-hero {
+    padding: 24px;
+  }
+  .primary,
+  .secondary,
+  .light-btn {
+    white-space: normal;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .primary,
+  .secondary,
+  .light-btn {
+    transition: none;
+    transform: none;
+  }
+}
+@media print {
+  :root {
+    --ink: #000;
+    --paper: #fff;
+    --accent: #fff;
+  }
+  dialog {
+    box-shadow: none;
+    border: 0;
+  }
+}
